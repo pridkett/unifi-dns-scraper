@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/naoina/toml"
 	"github.com/unpoller/unifi"
@@ -16,7 +17,9 @@ import (
 )
 
 type tomlConfig struct {
-	Unifi struct {
+	Daemonize bool
+	Sleep     int
+	Unifi     struct {
 		Host     string
 		User     string
 		Password string
@@ -50,69 +53,82 @@ func main() {
 	configFile := flag.String("config", "", "Filename with configuration")
 	flag.Parse()
 
-	if *configFile != "" {
-		logger.Infof("opening configuration file: %s", *configFile)
-		f, err := os.Open(*configFile)
+	for {
+		if *configFile != "" {
+			logger.Infof("opening configuration file: %s", *configFile)
+			f, err := os.Open(*configFile)
+			if err != nil {
+				panic(err)
+			}
+			defer f.Close()
+			if err := toml.NewDecoder(f).Decode(&config); err != nil {
+				panic(err)
+			}
+		} else {
+			logger.Fatal("Must specify configuration file with -config FILENAME")
+		}
+
+		c := &unifi.Config{
+			User:     config.Unifi.User,
+			Pass:     config.Unifi.Password,
+			URL:      config.Unifi.Host,
+			ErrorLog: logger.Debugf,
+			DebugLog: logger.Debugf,
+		}
+
+		uni, err := unifi.NewUnifi(c)
 		if err != nil {
-			panic(err)
+			logger.Fatalf("Error: %s", err)
 		}
-		defer f.Close()
-		if err := toml.NewDecoder(f).Decode(&config); err != nil {
-			panic(err)
+
+		sites, err := uni.GetSites()
+		if err != nil {
+			logger.Fatalf("Error: %s", err)
 		}
-	} else {
-		logger.Fatal("Must specify configuration file with -config FILENAME")
+		clients, err := uni.GetClients(sites)
+		if err != nil {
+			logger.Fatalf("Error: %s", err)
+		}
+		devices, err := uni.GetDevices(sites)
+		if err != nil {
+			logger.Fatalf("Error: %s", err)
+		}
+
+		logger.Infof("%d Unifi Sites Found:", len(sites))
+		// for i, site := range sites {
+		// 	logger.Infof("%d, %s %s", i+1, site.Name)
+		// }
+
+		logger.Infof("%d Clients connected:", len(clients))
+		// for i, client := range clients {
+		// 	logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
+		// }
+
+		logger.Infof("%d Unifi Switches Found", len(devices.USWs))
+		// for i, usw := range devices.USWs {
+		// 	logger.Infof("%d %s %s", i+1, usw.Name, usw.IP)
+		// }
+
+		logger.Infof("%d Unifi Gateways Found", len(devices.USGs))
+
+		logger.Infof("%d Unifi Wireless APs Found:", len(devices.UAPs))
+		// for i, uap := range devices.UAPs {
+		// 	logger.Infof("%d %s %s", i+1, uap.Name, uap.IP)
+		// }
+
+		createHostsFile(clients, devices.USWs, devices.UAPs)
+
+		if config.Daemonize {
+			sleep_dur := config.Sleep
+			if sleep_dur == 0 {
+				sleep_dur = 120
+			}
+			logger.Infof("Sleeping for %d seconds", sleep_dur)
+			time.Sleep(time.Duration(sleep_dur) * time.Second)
+		} else {
+			break
+		}
 	}
-
-	c := &unifi.Config{
-		User:     config.Unifi.User,
-		Pass:     config.Unifi.Password,
-		URL:      config.Unifi.Host,
-		ErrorLog: logger.Debugf,
-		DebugLog: logger.Debugf,
-	}
-
-	uni, err := unifi.NewUnifi(c)
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
-	}
-
-	sites, err := uni.GetSites()
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
-	}
-	clients, err := uni.GetClients(sites)
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
-	}
-	devices, err := uni.GetDevices(sites)
-	if err != nil {
-		logger.Fatalf("Error: %s", err)
-	}
-
-	logger.Infof("%d Unifi Sites Found:", len(sites))
-	// for i, site := range sites {
-	// 	logger.Infof("%d, %s %s", i+1, site.Name)
-	// }
-
-	logger.Infof("%d Clients connected:", len(clients))
-	// for i, client := range clients {
-	// 	logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
-	// }
-
-	logger.Infof("%d Unifi Switches Found", len(devices.USWs))
-	// for i, usw := range devices.USWs {
-	// 	logger.Infof("%d %s %s", i+1, usw.Name, usw.IP)
-	// }
-
-	logger.Infof("%d Unifi Gateways Found", len(devices.USGs))
-
-	logger.Infof("%d Unifi Wireless APs Found:", len(devices.UAPs))
-	// for i, uap := range devices.UAPs {
-	// 	logger.Infof("%d %s %s", i+1, uap.Name, uap.IP)
-	// }
-
-	createHostsFile(clients, devices.USWs, devices.UAPs)
 }
 
 func updateHostsFile(m *hostmap) *hostmap {
