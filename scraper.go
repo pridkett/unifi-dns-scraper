@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/naoina/toml"
@@ -33,6 +34,7 @@ type tomlConfig struct {
 type hostmap struct {
 	ip        netaddr.IP
 	hostnames []string
+	fqdns     []string
 }
 
 // set up a global logger...
@@ -112,20 +114,19 @@ func main() {
 	createHostsFile(clients, devices.USWs, devices.UAPs)
 }
 
-func updateHostsFile(m *hostmap) string {
-	hostnames := []string{}
+func updateHostsFile(m *hostmap) *hostmap {
 	for _, domain := range config.Hostsfile.Domains {
 		for _, hostname := range m.hostnames {
-			hostnames = append(hostnames, fmt.Sprintf("%s.%s", hostname, domain))
+			m.fqdns = append(m.fqdns, fmt.Sprintf("%s.%s", hostname, domain))
 		}
 	}
-	outstr := fmt.Sprintf("%s %s\n", m.ip, strings.Join(hostnames, " "))
-	return outstr
+	return m
 }
 
 func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.UAP) {
 	var builder strings.Builder
 
+	var hostmaps = []*hostmap{}
 	if config.Hostsfile.Filename == "" {
 		logger.Warn("Hostfile output filename is nil - skipping")
 		return
@@ -143,7 +144,7 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 			logger.Fatalf("unable to parse IP address: %s", client.IP)
 		}
 		m.hostnames = append(m.hostnames, client.Name)
-		builder.WriteString(updateHostsFile(&m))
+		hostmaps = append(hostmaps, updateHostsFile(&m))
 	}
 
 	for _, usw := range switches {
@@ -154,7 +155,7 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 			logger.Fatalf("unable to parse IP address: %s", usw.IP)
 		}
 		m.hostnames = append(m.hostnames, usw.Name)
-		builder.WriteString(updateHostsFile(&m))
+		hostmaps = append(hostmaps, updateHostsFile(&m))
 	}
 
 	for _, ap := range aps {
@@ -166,8 +167,17 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		}
 
 		m.hostnames = append(m.hostnames, ap.Name)
-		builder.WriteString(updateHostsFile(&m))
+		hostmaps = append(hostmaps, updateHostsFile(&m))
 	}
+
+	sort.Slice(hostmaps, func(i, j int) bool {
+		return hostmaps[i].ip.Less(hostmaps[j].ip)
+	})
+
+	for _, hm := range hostmaps {
+		builder.WriteString(fmt.Sprintf("%s %s\n", hm.ip, strings.Join(hm.fqdns, " ")))
+	}
+
 	err := ioutil.WriteFile(config.Hostsfile.Filename, []byte(builder.String()), 0666)
 	if err != nil {
 		logger.Fatal(err)
