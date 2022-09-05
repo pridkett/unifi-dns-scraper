@@ -167,16 +167,17 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		hostmaps = append(hostmaps, updateHostsFile(&m))
 	}
 
-	for _, client := range clients {
-		// logger.Debugf("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
+	for i, client := range clients {
+		// logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
 		var m hostmap
 		var err error
 		m.ip, err = netaddr.ParseIP(client.IP)
 		if err != nil {
-			logger.Fatalf("unable to parse IP address: %s", client.IP)
+			logger.Warnf("Error Parsing Record: line=%d, ID=%s, hostname=%s, IP=%s, name=%s, lastseen=%d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
+		} else {
+			m.hostnames = append(m.hostnames, client.Name)
+			hostmaps = append(hostmaps, updateHostsFile(&m))
 		}
-		m.hostnames = append(m.hostnames, client.Name)
-		hostmaps = append(hostmaps, updateHostsFile(&m))
 	}
 
 	for _, usw := range switches {
