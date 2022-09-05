@@ -27,6 +27,7 @@ type tomlConfig struct {
 		Additional []struct {
 			IP        string
 			Hostnames []string
+			Name      string
 		}
 	}
 }
@@ -134,6 +135,21 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 
 	builder.WriteString("# This file created by unifi-dns-scraper\n")
 	builder.WriteString("# Do not manually edit\n\n")
+
+	for _, additional := range config.Hostsfile.Additional {
+		var m hostmap
+		var err error
+		m.ip, err = netaddr.ParseIP(additional.IP)
+		if err != nil {
+			logger.Fatalf("unable to parse IP address: %s", additional.IP)
+		}
+		if len(additional.Hostnames) > 0 {
+			m.hostnames = append(m.hostnames, additional.Hostnames...)
+		} else {
+			m.hostnames = append(m.hostnames, additional.Name)
+		}
+		hostmaps = append(hostmaps, updateHostsFile(&m))
+	}
 
 	for _, client := range clients {
 		// logger.Debugf("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
