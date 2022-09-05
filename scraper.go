@@ -109,7 +109,7 @@ func main() {
 	// 	logger.Infof("%d %s %s", i+1, uap.Name, uap.IP)
 	// }
 
-	createHostsFile(clients)
+	createHostsFile(clients, devices.USWs, devices.UAPs)
 }
 
 func updateHostsFile(m *hostmap) string {
@@ -123,7 +123,7 @@ func updateHostsFile(m *hostmap) string {
 	return outstr
 }
 
-func createHostsFile(clients []*unifi.Client) {
+func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.UAP) {
 	var builder strings.Builder
 
 	if config.Hostsfile.Filename == "" {
@@ -139,13 +139,35 @@ func createHostsFile(clients []*unifi.Client) {
 		var m hostmap
 		var err error
 		m.ip, err = netaddr.ParseIP(client.IP)
-		m.hostnames = append(m.hostnames, client.Name)
 		if err != nil {
 			logger.Fatalf("unable to parse IP address: %s", client.IP)
 		}
+		m.hostnames = append(m.hostnames, client.Name)
 		builder.WriteString(updateHostsFile(&m))
 	}
 
+	for _, usw := range switches {
+		var m hostmap
+		var err error
+		m.ip, err = netaddr.ParseIP(usw.IP)
+		if err != nil {
+			logger.Fatalf("unable to parse IP address: %s", usw.IP)
+		}
+		m.hostnames = append(m.hostnames, usw.Name)
+		builder.WriteString(updateHostsFile(&m))
+	}
+
+	for _, ap := range aps {
+		var m hostmap
+		var err error
+		m.ip, err = netaddr.ParseIP(ap.IP)
+		if err != nil {
+			logger.Fatalf("unable to parse IP address: %s", ap.IP)
+		}
+
+		m.hostnames = append(m.hostnames, ap.Name)
+		builder.WriteString(updateHostsFile(&m))
+	}
 	err := ioutil.WriteFile(config.Hostsfile.Filename, []byte(builder.String()), 0666)
 	if err != nil {
 		logger.Fatal(err)
