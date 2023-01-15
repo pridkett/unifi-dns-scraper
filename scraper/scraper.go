@@ -15,6 +15,7 @@ import (
 type TomlConfig struct {
 	Daemonize bool
 	Sleep     int
+	MaxAge    int
 	Unifi     struct {
 		Host     string
 		User     string
@@ -172,6 +173,17 @@ func removeDuplicateHosts(m []*Hostmap) []*Hostmap {
 	return newhosts
 }
 
+// remove all hosts from the hostmap that have not been seen in d seconds
+func removeOldHostsByTime(m []*Hostmap, d time.Duration) []*Hostmap {
+	var newhosts []*Hostmap
+	for _, host := range m {
+		if time.Since(host.lastseen) < d {
+			newhosts = append(newhosts, host)
+		}
+	}
+	return newhosts
+}
+
 func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.UAP, cfg *TomlConfig, hostmaps []*Hostmap) []*Hostmap {
 	var builder strings.Builder
 
@@ -251,6 +263,10 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 
 	hostmaps = removeDuplicateHosts(hostmaps)
 	hostmaps = removeOldHosts(hostmaps)
+
+	if cfg.MaxAge > 0 {
+		hostmaps = removeOldHostsByTime(hostmaps, time.Duration(cfg.MaxAge))
+	}
 
 	sort.Slice(hostmaps, func(i, j int) bool {
 		return hostmaps[i].ip.Less(hostmaps[j].ip)
