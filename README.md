@@ -44,6 +44,7 @@ This block contains the settings for generation of the hosts file.
 * **`domains`**: A list of strings that represent the domains that will be appended to each of the hostnames.
 * **`filename`**: A string for the output file
 * **`additional`**: A list of objects, each containing an `ip` and `name` field. This can be used to inject additional hostnames into your host file for systems that don't appear in the Unifi interface.
+* **`blocked`**: A list of objects, with an `ip` and `name`, or just an `ip`, or just a `name` that is used to block those entries from appearing in your host file output. The use case for this is that that I have a Tesla Powerwall Gateway that keeps on bouncing over to 192.168.90.2 for some reason and I don't want that entry appearing in my host file. This can also be used to ensure that some devices don't get hostnames in the file for other reasons.
 
 ### Example Configuration
 
@@ -62,7 +63,8 @@ password = "DNS-scraper-PASSWORD-123!@#"
 [hostsfile]
 domains = ["example.come", "yourhome.example.com", "local"]
 filename = "hosts.txt"
-additional = [{ ip = "192.168.1.1", name = "unifi" }]
+additional = [{ ip="192.168.1.1", name="unifi" }]
+blocked = [{ ip="192.168.90.2", name="powerwall" }]
 ```
 
 License

@@ -29,6 +29,10 @@ type TomlConfig struct {
 			Hostnames []string
 			Name      string
 		}
+		Blocked []struct {
+			IP   string
+			Name string
+		}
 	}
 }
 
@@ -184,6 +188,43 @@ func removeOldHostsByTime(m []*Hostmap, d time.Duration) []*Hostmap {
 	return newhosts
 }
 
+func removeBlockedHosts(m []*Hostmap, cfg *TomlConfig) []*Hostmap {
+	var newhosts []*Hostmap
+	for _, host := range m {
+		if !checkBlocked(host, cfg) {
+			newhosts = append(newhosts, host)
+		} else {
+			logger.Warnf("host name=%s ip=%s is blocked from appearing in output by configuration", host.hostnames[0], host.ip.String())
+		}
+	}
+	return newhosts
+}
+
+// check to see if the IP address or hostname is in the blocked list
+func checkBlocked(h *Hostmap, cfg *TomlConfig) bool {
+	for _, blocked := range cfg.Hostsfile.Blocked {
+		if blocked.Name != "" {
+			// iterate over all of the given hostnames for the host
+			for _, hostname := range h.hostnames {
+				if strings.EqualFold(strings.TrimSpace(blocked.Name), strings.TrimSpace(hostname)) {
+					if blocked.IP != "" {
+						if blocked.IP == h.ip.String() {
+							return true
+						}
+					} else {
+						return true
+					}
+				}
+			}
+		} else if blocked.IP != "" {
+			if strings.EqualFold(strings.TrimSpace(blocked.IP), strings.TrimSpace(h.ip.String())) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.UAP, cfg *TomlConfig, hostmaps []*Hostmap) []*Hostmap {
 	var builder strings.Builder
 
@@ -219,16 +260,15 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		// logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
 		var m Hostmap
 		var err error
-		m.ip, err = netip.ParseAddr(client.IP)
 		m.lastseenUnifi = time.Unix(client.LastSeen, 0)
 		m.lastseen = time.Now()
-
+		m.ip, err = netip.ParseAddr(client.IP)
 		if err != nil {
 			logger.Warnf("Error Parsing Record: line=%d, ID=%s, hostname=%s, IP=%s, name=%s, lastseen=%d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
-		} else {
-			m.hostnames = append(m.hostnames, client.Name)
-			hostmaps = append(hostmaps, updateHostsFile(&m, cfg))
+			continue
 		}
+		m.hostnames = append(m.hostnames, client.Name)
+		hostmaps = append(hostmaps, updateHostsFile(&m, cfg))
 	}
 
 	for _, usw := range switches {
@@ -256,11 +296,13 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		if err != nil {
 			logger.Fatalf("unable to parse IP address: %s", ap.IP)
 		}
-
 		m.hostnames = append(m.hostnames, ap.Name)
 		hostmaps = append(hostmaps, updateHostsFile(&m, cfg))
 	}
 
+	// blocked hosts get removed first - otherwise their "correct" IP address
+	// may be hidden by one of the incorrect host addresses
+	hostmaps = removeBlockedHosts(hostmaps, cfg)
 	hostmaps = removeDuplicateHosts(hostmaps)
 	hostmaps = removeOldHosts(hostmaps)
 
