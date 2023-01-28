@@ -58,7 +58,7 @@ func GenerateHostsFile(cfg *TomlConfig, hostmaps []*Hostmap) []*Hostmap {
 		User:     cfg.Unifi.User,
 		Pass:     cfg.Unifi.Password,
 		URL:      cfg.Unifi.Host,
-		ErrorLog: logger.Debugf,
+		ErrorLog: logger.Errorf,
 		DebugLog: logger.Debugf,
 	}
 
@@ -67,20 +67,26 @@ func GenerateHostsFile(cfg *TomlConfig, hostmaps []*Hostmap) []*Hostmap {
 
 	uni, err := unifi.NewUnifi(c)
 	if err != nil {
-		logger.Fatalf("Error: %s", err)
+		logger.Errorf("Error conncting to Unifi: %s", err)
+		logger.Warnf("Not updating list of hosts this round - will try again later")
+		return hostmaps
 	}
 
 	sites, err := uni.GetSites()
 	if err != nil {
-		logger.Fatalf("Error: %s", err)
+		logger.Errorf("Error getting sites: %s", err)
+		logger.Warnf("Not updating list of hosts this round - will try again later")
+		return hostmaps
 	}
+
 	clients, err := uni.GetClients(sites)
 	if err != nil {
-		logger.Fatalf("Error: %s", err)
+		logger.Errorf("Error getting clients: %s", err)
 	}
+
 	devices, err := uni.GetDevices(sites)
 	if err != nil {
-		logger.Fatalf("Error: %s", err)
+		logger.Errorf("Error getting devices: %s", err)
 	}
 
 	logger.Infof("%d Unifi Sites Found:", len(sites))
@@ -246,7 +252,8 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		var err error
 		m.ip, err = netip.ParseAddr(additional.IP)
 		if err != nil {
-			logger.Fatalf("unable to parse IP address: %s", additional.IP)
+			logger.Warnf("unable to parse IP address: %s", additional.IP)
+			continue
 		}
 		if len(additional.Hostnames) > 0 {
 			m.hostnames = append(m.hostnames, additional.Hostnames...)
@@ -280,8 +287,10 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		m.lastseen = time.Now()
 
 		if err != nil {
-			logger.Fatalf("unable to parse IP address: %s", usw.IP)
+			logger.Warnf("unable to parse IP address: %s", usw.IP)
+			continue
 		}
+
 		m.hostnames = append(m.hostnames, usw.Name)
 		hostmaps = append(hostmaps, updateHostsFile(&m, cfg))
 	}
@@ -294,8 +303,10 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		m.lastseen = time.Now()
 
 		if err != nil {
-			logger.Fatalf("unable to parse IP address: %s", ap.IP)
+			logger.Warnf("unable to parse IP address: %s", ap.IP)
+			continue
 		}
+
 		m.hostnames = append(m.hostnames, ap.Name)
 		hostmaps = append(hostmaps, updateHostsFile(&m, cfg))
 	}
