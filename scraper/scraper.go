@@ -33,6 +33,7 @@ type TomlConfig struct {
 			IP   string
 			Name string
 		}
+		KeepMacs bool
 	}
 }
 
@@ -194,6 +195,23 @@ func removeOldHostsByTime(m []*Hostmap, d time.Duration) []*Hostmap {
 	return newhosts
 }
 
+func removeMACHosts(m []*Hostmap) []*Hostmap {
+	var newhosts []*Hostmap
+	for _, host := range m {
+		var hostnames []string
+		for _, hostname := range host.hostnames {
+			if !strings.Contains(hostname, ":") {
+				hostnames = append(hostnames, hostname)
+			}
+		}
+		if len(hostnames) > 0 {
+			host.hostnames = hostnames
+			newhosts = append(newhosts, host)
+		}
+	}
+	return newhosts
+}
+
 func removeBlockedHosts(m []*Hostmap, cfg *TomlConfig) []*Hostmap {
 	var newhosts []*Hostmap
 	for _, host := range m {
@@ -313,6 +331,11 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 
 	// blocked hosts get removed first - otherwise their "correct" IP address
 	// may be hidden by one of the incorrect host addresses
+	if !cfg.Hostsfile.KeepMacs {
+		logger.Warnf("Skipping MAC addresses")
+		hostmaps = removeMACHosts(hostmaps)
+	}
+
 	hostmaps = removeBlockedHosts(hostmaps, cfg)
 	hostmaps = removeDuplicateHosts(hostmaps)
 	hostmaps = removeOldHosts(hostmaps)

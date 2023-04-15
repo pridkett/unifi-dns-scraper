@@ -45,6 +45,7 @@ This block contains the settings for generation of the hosts file.
 * **`filename`**: A string for the output file
 * **`additional`**: A list of objects, each containing an `ip` and `name` field. This can be used to inject additional hostnames into your host file for systems that don't appear in the Unifi interface.
 * **`blocked`**: A list of objects, with an `ip` and `name`, or just an `ip`, or just a `name` that is used to block those entries from appearing in your host file output. The use case for this is that that I have a Tesla Powerwall Gateway that keeps on bouncing over to 192.168.90.2 for some reason and I don't want that entry appearing in my host file. This can also be used to ensure that some devices don't get hostnames in the file for other reasons.
+* **`keep_macs`**: A boolean (`true`/`false`) that indicates whether or not hostnames that are returned as MAC addresses should be included. Defaults to `false`. I haven't yet figured out what causes this, but hostnames with colons are not valid hostnames.
 
 ### Example Configuration
 
@@ -65,6 +66,7 @@ domains = ["example.come", "yourhome.example.com", "local"]
 filename = "hosts.txt"
 additional = [{ ip="192.168.1.1", name="unifi" }]
 blocked = [{ ip="192.168.90.2", name="powerwall" }]
+keep_macs = false
 ```
 
 License

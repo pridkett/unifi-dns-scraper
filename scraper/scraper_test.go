@@ -76,3 +76,33 @@ func TestRemoveOldHostsByTime(t *testing.T) {
 		t.Errorf("Expected host1 as hostname, got %s", newhostmaps[0].hostnames[0])
 	}
 }
+
+func TestRemoveMACHosts(t *testing.T) {
+	// create the list of hostnames
+	var hostmaps = []*Hostmap{}
+
+	hostmaps = append(hostmaps, &Hostmap{ip: createIP("192.168.1.1"),
+		hostnames: []string{"00:00:00:00:00:00"},
+		lastseen:  time.Now()})
+	hostmaps = append(hostmaps, &Hostmap{ip: createIP("192.168.1.2"),
+		hostnames: []string{"host2"},
+		lastseen:  time.Unix(time.Now().Unix()-100, 0)})
+	hostmaps = append(hostmaps, &Hostmap{ip: createIP("192.168.1.3"),
+		hostnames: []string{"00:00:00:00:00:00", "testhost"},
+		lastseen:  time.Unix(time.Now().Unix()-100, 0)})
+
+	newhostmaps := removeMACHosts(hostmaps)
+
+	if len(newhostmaps) != 2 {
+		t.Errorf("Expected 2 hosts, got %d", len(newhostmaps))
+	}
+
+	if newhostmaps[0].hostnames[0] != "host2" {
+		t.Errorf("Expected host2 as hostname, got %s", newhostmaps[0].hostnames[0])
+	}
+
+	if newhostmaps[1].hostnames[0] != "testhost" {
+		t.Errorf("Expected testhost as hostname, got %s", newhostmaps[0].hostnames[0])
+	}
+
+}
