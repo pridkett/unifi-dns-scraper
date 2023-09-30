@@ -285,11 +285,11 @@ func createHostsFile(clients []*unifi.Client, switches []*unifi.USW, aps []*unif
 		// logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
 		var m Hostmap
 		var err error
-		m.lastseenUnifi = time.Unix(client.LastSeen, 0)
+		m.lastseenUnifi = time.Unix(int64(client.LastSeen.Val), 0)
 		m.lastseen = time.Now()
 		m.ip, err = netip.ParseAddr(client.IP)
 		if err != nil {
-			logger.Warnf("Error Parsing Record: line=%d, ID=%s, hostname=%s, IP=%s, name=%s, lastseen=%d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
+			logger.Warnf("Error Parsing Record: line=%d, ID=%s, hostname=%s, IP=%s, name=%s, lastseen=%f", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen.Val)
 			continue
 		}
 		m.hostnames = append(m.hostnames, client.Name)
