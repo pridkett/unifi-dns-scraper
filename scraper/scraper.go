@@ -108,12 +108,12 @@ func getUnifiElements(cfg *TomlConfig) ([]*unifi.Site, *unifi.Devices, []*unifi.
 		return sites, nil, clients, err
 	}
 
-	logger.Infof("%d Unifi Sites Found:", len(sites))
+	logger.Infof("%d Unifi Sites Found", len(sites))
 	// for i, site := range sites {
 	// 	logger.Infof("%d, %s %s", i+1, site.Name)
 	// }
 
-	logger.Infof("%d Clients connected:", len(clients))
+	logger.Infof("%d Clients connected", len(clients))
 	// for i, client := range clients {
 	// 	logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
 	// }
@@ -125,7 +125,7 @@ func getUnifiElements(cfg *TomlConfig) ([]*unifi.Site, *unifi.Devices, []*unifi.
 
 	logger.Infof("%d Unifi Gateways Found", len(devices.USGs))
 
-	logger.Infof("%d Unifi Wireless APs Found:", len(devices.UAPs))
+	logger.Infof("%d Unifi Wireless APs Found", len(devices.UAPs))
 	// for i, uap := range devices.UAPs {
 	// 	logger.Infof("%d %s %s", i+1, uap.Name, uap.IP)
 	// }
@@ -223,10 +223,11 @@ func removeOldHosts(m []*Hostmap) []*Hostmap {
 func removeDuplicateHosts(m []*Hostmap) []*Hostmap {
 	// create a dictionary for hosts
 	hosts := make(map[string]*Hostmap)
-
+	duplicate_count := 0
 	for _, host := range m {
 		// check if host is in the dictionary
 		if _, ok := hosts[host.ip.String()]; ok {
+			duplicate_count++
 			// if it is, then check if the lastseen time is newer
 			if host.lastseen.After(hosts[host.ip.String()].lastseen) {
 				// if it is, then replace the existing entry
@@ -243,29 +244,42 @@ func removeDuplicateHosts(m []*Hostmap) []*Hostmap {
 	for _, host := range hosts {
 		newhosts = append(newhosts, host)
 	}
+
+	logger.Infof("Removed %d duplicate hosts", duplicate_count)
 	return newhosts
 }
 
 // remove all hosts from the hostmap that have not been seen in d seconds
 func removeOldHostsByTime(m []*Hostmap, d time.Duration) []*Hostmap {
+	removed_hosts := 0
 	for _, host := range m {
 		if time.Since(host.lastseen) > d {
 			host.removalCode = Old
+			removed_hosts++
 		}
 	}
+
+	logger.Infof("Removed %d old hosts", removed_hosts)
 	return m
 }
 
 // remove all hosts from the hostmap that have a MAC address in the hostname
 // I still don't know why this happens sometimes
 func removeMACHosts(m []*Hostmap) []*Hostmap {
+	hosts_modified := 0
+	hostnames_modified := 0
 	for _, host := range m {
 		var hostnames []string
 		originalHostnames := host.hostnames
 		for _, hostname := range host.hostnames {
 			if !strings.Contains(hostname, ":") {
 				hostnames = append(hostnames, hostname)
+			} else {
+				hostnames_modified++
 			}
+		}
+		if len(hostnames) != len(originalHostnames) {
+			hosts_modified++
 		}
 		if len(hostnames) > 0 {
 			host.hostnames = hostnames
@@ -275,6 +289,7 @@ func removeMACHosts(m []*Hostmap) []*Hostmap {
 			host.hostnames = originalHostnames
 		}
 	}
+	logger.Infof("Removed %d MAC address hostnames from %d hosts", hostnames_modified, hosts_modified)
 	return m
 }
 
@@ -282,12 +297,16 @@ func removeMACHosts(m []*Hostmap) []*Hostmap {
 // really this is only needed because my Tesla Powerwall likes to
 // misbehave and jump around IP addresses
 func removeBlockedHosts(m []*Hostmap, cfg *TomlConfig) []*Hostmap {
+	hosts_removed := 0
 	for _, host := range m {
 		if checkBlocked(host, cfg) {
 			logger.Warnf("host name=%s ip=%s is blocked from appearing in output by configuration", host.hostnames[0], host.ip.String())
 			host.removalCode = Blocked
+			hosts_removed++
 		}
 	}
+
+	logger.Infof("Removed %d blocked hosts", hosts_removed)
 	return m
 }
 
@@ -390,7 +409,6 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 	// blocked hosts get removed first - otherwise their "correct" IP address
 	// may be hidden by one of the incorrect host addresses
 	if !cfg.Processing.KeepMacs {
-		logger.Warnf("Skipping MAC addresses")
 		hostmaps = removeMACHosts(hostmaps)
 	}
 

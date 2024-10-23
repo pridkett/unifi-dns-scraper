@@ -28,7 +28,10 @@ func main() {
 	var db *gorm.DB
 	var err error
 
+	loop_count := 0
 	for {
+		loop_count++
+		logger.Infof("** Starting loop %d **", loop_count)
 		if *configFile != "" {
 			logger.Infof("opening configuration file: %s", *configFile)
 			f, err := os.Open(*configFile)
@@ -78,6 +81,7 @@ func main() {
 				sleep_dur = 120
 			}
 			logger.Infof("Sleeping for %d seconds", sleep_dur)
+			logger.Infof("** Ending loop %d **", loop_count)
 			time.Sleep(time.Duration(sleep_dur) * time.Second)
 		} else {
 			break
