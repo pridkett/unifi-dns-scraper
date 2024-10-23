@@ -1,2 +1,4 @@
 unifi-dns-scraper
 config.toml
+*.db
+hosts*.txt
