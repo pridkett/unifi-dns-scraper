@@ -7,8 +7,9 @@ import (
 
 	"strings"
 
+	"github.com/glebarez/sqlite" // pure go sqlite driver
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
+
 	"gorm.io/gorm"
 )
 
