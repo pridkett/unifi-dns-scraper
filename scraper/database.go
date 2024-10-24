@@ -9,8 +9,8 @@ import (
 
 	"github.com/glebarez/sqlite" // pure go sqlite driver
 	"gorm.io/driver/mysql"
-
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func OpenDatabase(driver string, dsn string) (*gorm.DB, error) {
@@ -24,7 +24,7 @@ func OpenDatabase(driver string, dsn string) (*gorm.DB, error) {
 			return nil, err
 		}
 	case "sqlite":
-		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Info)})
 		if err != nil {
 			return nil, err
 		}
@@ -58,9 +58,11 @@ func SaveDatabase(db *gorm.DB, hostmaps []*Hostmap, config *TomlConfig) error {
 
 	for _, hostmap := range hostmaps {
 		for _, host := range hostmap.fqdns {
-			if !strings.HasSuffix(host, ".") {
-				host = host + "."
-			}
+
+			host = strings.TrimSuffix(host, ".")
+			// if !strings.HasSuffix(host, ".") {
+			// 	host = host + "."
+			// }
 
 			if record, ok := recordMap[host]; ok {
 				if record.Content != hostmap.ip.String() {

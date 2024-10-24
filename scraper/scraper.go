@@ -181,7 +181,7 @@ func SaveHostsFile(hostmaps []*Hostmap, cfg *TomlConfig) error {
 func addDomainsToHostmap(m *Hostmap, domains []string) *Hostmap {
 	for _, domain := range domains {
 		for _, hostname := range m.hostnames {
-			m.fqdns = append(m.fqdns, fmt.Sprintf("%s.%s", hostname, domain))
+			m.fqdns = append(m.fqdns, fmt.Sprintf("%s.%s", strings.ToLower(hostname), strings.ToLower(domain)))
 		}
 	}
 	return m
