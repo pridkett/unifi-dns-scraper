@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -9,6 +10,13 @@ import (
 	"github.com/pridkett/unifi-dns-scraper/scraper"
 	"github.com/withmandala/go-log"
 	"gorm.io/gorm"
+)
+
+// Version information set by build
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 // set up a global logger...
@@ -21,8 +29,18 @@ func main() {
 	logger = log.New(os.Stderr).WithColor()
 	scraper.SetLogger(logger)
 
+	// Command line flags
 	configFile := flag.String("config", "", "Filename with configuration")
+	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("unifi-dns-scraper version %s\n", version)
+		fmt.Printf("commit: %s\n", commit)
+		fmt.Printf("built at: %s\n", date)
+		os.Exit(0)
+	}
 
 	var hostmaps = []*scraper.Hostmap{}
 	var db *gorm.DB

@@ -153,6 +153,40 @@ The test suite includes:
 3. **Database Tests**: Test database operations with an in-memory SQLite database
 4. **Integration Tests**: Test workflow from data retrieval to output generation
 
+## Continuous Integration and Releases
+
+This project uses GitHub Actions for continuous integration and automated releases:
+
+### Automated Tests
+
+Tests are automatically run on every push to the main branch and on every pull request.
+
+### Creating a Release
+
+To create a new release:
+
+1. Tag a commit with the version number using semantic versioning:
+   ```bash
+   git tag -a v1.0.0 -m "Release v1.0.0"
+   git push origin v1.0.0
+   ```
+
+2. GitHub Actions will automatically:
+   - Create a new GitHub release
+   - Build binaries for multiple platforms:
+     - Linux (x86_64, arm64, armv7)
+     - macOS (x86_64, arm64)
+   - Attach the compiled binaries to the GitHub release
+
+### Cross-Platform Binaries
+
+The release process creates statically linked binaries for the following platforms:
+- Linux x86_64 (64-bit Intel/AMD)
+- Linux arm64 (64-bit ARM)
+- Linux armv7 (32-bit ARM)
+- macOS x86_64 (Intel Mac)
+- macOS arm64 (Apple Silicon)
+
 ## License
 
 Copyright (c) 2023 Patrick Wagstrom
