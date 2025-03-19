@@ -1,6 +1,7 @@
 module github.com/pridkett/unifi-dns-scraper
 
 go 1.18
+toolchain go1.24.1
 
 require (
 	github.com/glebarez/sqlite v1.11.0
@@ -30,9 +31,9 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
 	gorm.io/driver/mysql v1.5.7
 )
