@@ -39,9 +39,20 @@ go test ./...
 # Build the Docker image
 docker build -t unifi-dns-scraper .
 
-# Run with Docker
+# Option 1: Run with Docker using a config file
 docker run -v $(pwd)/config.toml:/app/config.toml -v $(pwd)/hosts.txt:/app/hosts.txt unifi-dns-scraper
+
+# Option 2: Run with Docker using environment variables
+docker run \
+  -e SCRAPER_UNIFI_USER=admin \
+  -e SCRAPER_UNIFI_PASSWORD=your-secure-password \
+  -e SCRAPER_UNIFI_HOST=https://192.168.1.1 \
+  -v $(pwd)/config.toml:/app/config.toml \
+  -v $(pwd)/hosts.txt:/app/hosts.txt \
+  unifi-dns-scraper
 ```
+
+When using Option 2 with environment variables, the values provided via environment variables will override any corresponding values in the config.toml file.
 
 ## Usage
 
@@ -51,7 +62,21 @@ docker run -v $(pwd)/config.toml:/app/config.toml -v $(pwd)/hosts.txt:/app/hosts
 
 ## Configuration
 
-You'll need to create a file called `config.toml` that has the configuration and credentials needed to connect to your Unifi system.
+You'll need to create a file called `config.toml` that has the configuration and credentials needed to connect to your Unifi system. Alternatively, certain configuration values can be set using environment variables (see [Environment Variables](#environment-variables)).
+
+### Environment Variables
+
+The following environment variables can be used to override values in the TOML configuration:
+
+| Environment Variable | Description | TOML Equivalent |
+|---------------------|-------------|-----------------|
+| `SCRAPER_UNIFI_USER` | Username for Unifi Controller login | `unifi.user` |
+| `SCRAPER_UNIFI_PASSWORD` | Password for Unifi Controller login | `unifi.password` |
+| `SCRAPER_UNIFI_HOST` | URL of the Unifi Controller | `unifi.host` |
+
+When a value is set in both the TOML configuration and as an environment variable, the environment variable takes precedence. A warning message will be logged indicating that the environment variable value is being used instead of the TOML configuration.
+
+Using environment variables can be particularly useful in containerized environments or when you want to avoid storing sensitive credentials in configuration files.
 
 ### Global Settings
 There are a couple of global settings that affect the overall execution of the program.

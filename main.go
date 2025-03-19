@@ -60,6 +60,9 @@ func main() {
 			if err := toml.NewDecoder(f).Decode(&config); err != nil {
 				panic(err)
 			}
+
+			// Update config from environment variables (environment variables will override TOML values)
+			scraper.UpdateConfigFromEnv(&config)
 		} else {
 			logger.Fatal("Must specify configuration file with -config FILENAME")
 		}

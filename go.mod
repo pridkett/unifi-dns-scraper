@@ -1,6 +1,7 @@
 module github.com/pridkett/unifi-dns-scraper
 
 go 1.24
+
 toolchain go1.24.1
 
 require (

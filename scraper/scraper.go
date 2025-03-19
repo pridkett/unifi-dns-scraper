@@ -73,6 +73,37 @@ func SetLogger(l *log.Logger) {
 	logger = l
 }
 
+// UpdateConfigFromEnv checks for environment variables and updates the config accordingly.
+// If an environment variable is set, it will override the corresponding value in the TomlConfig.
+// This function also logs a warning if both the TomlConfig and environment variable are set.
+func UpdateConfigFromEnv(cfg *TomlConfig) {
+	// Check for SCRAPER_UNIFI_USER
+	if envUser := os.Getenv("SCRAPER_UNIFI_USER"); envUser != "" {
+		if cfg.Unifi.User != "" && cfg.Unifi.User != envUser && logger != nil {
+			logger.Warnf("Unifi.User is defined in both TOML config (%s) and environment variable SCRAPER_UNIFI_USER (%s). Using environment variable.",
+				cfg.Unifi.User, envUser)
+		}
+		cfg.Unifi.User = envUser
+	}
+
+	// Check for SCRAPER_UNIFI_PASSWORD
+	if envPassword := os.Getenv("SCRAPER_UNIFI_PASSWORD"); envPassword != "" {
+		if cfg.Unifi.Password != "" && cfg.Unifi.Password != envPassword && logger != nil {
+			logger.Warnf("Unifi.Password is defined in both TOML config and environment variable SCRAPER_UNIFI_PASSWORD. Using environment variable.")
+		}
+		cfg.Unifi.Password = envPassword
+	}
+
+	// Check for SCRAPER_UNIFI_HOST
+	if envHost := os.Getenv("SCRAPER_UNIFI_HOST"); envHost != "" {
+		if cfg.Unifi.Host != "" && cfg.Unifi.Host != envHost && logger != nil {
+			logger.Warnf("Unifi.Host is defined in both TOML config (%s) and environment variable SCRAPER_UNIFI_HOST (%s). Using environment variable.",
+				cfg.Unifi.Host, envHost)
+		}
+		cfg.Unifi.Host = envHost
+	}
+}
+
 func getUnifiElements(cfg *TomlConfig) ([]*unifi.Site, *unifi.Devices, []*unifi.Client, error) {
 	c := &unifi.Config{
 		User:     cfg.Unifi.User,
