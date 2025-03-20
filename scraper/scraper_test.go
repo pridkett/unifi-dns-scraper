@@ -328,6 +328,7 @@ func TestRemoveBlockedHosts(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{
@@ -353,6 +354,7 @@ func TestRemoveBlockedHosts(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{
@@ -420,6 +422,7 @@ func TestCheckBlocked(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{
@@ -441,6 +444,7 @@ func TestCheckBlocked(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{
@@ -462,6 +466,7 @@ func TestCheckBlocked(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{
@@ -483,6 +488,7 @@ func TestCheckBlocked(t *testing.T) {
 						Name      string
 					}
 					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					Blocked: []struct{ IP, Name string }{

@@ -27,6 +27,7 @@ func TestGenerateHostsFileWithMock(t *testing.T) {
 				Name      string
 			}
 			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
 			KeepMacs bool
 		}{
 			Domains: []string{"test.local"},
@@ -128,6 +129,7 @@ func TestErrorHandlingWithMock(t *testing.T) {
 				Name      string
 			}
 			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
 			KeepMacs bool
 		}{
 			Domains: []string{"test.local"},

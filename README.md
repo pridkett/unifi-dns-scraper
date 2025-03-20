@@ -39,8 +39,11 @@ go test ./...
 # Build the Docker image
 docker build -t unifi-dns-scraper .
 
+# touch an empty sqlite database to keep Docker from using it as a directory
+touch scraper.db
+
 # Option 1: Run with Docker using a config file
-docker run -v $(pwd)/config.toml:/app/config.toml -v $(pwd)/hosts.txt:/app/hosts.txt unifi-dns-scraper
+docker run -v $(pwd)/config.toml:/app/config.toml -v $(pwd)/hosts.txt:/app/hosts.txt -v $(pwd)/scraper.db:/app/scraper.db unifi-dns-scraper
 
 # Option 2: Run with Docker using environment variables
 docker run \
@@ -49,12 +52,15 @@ docker run \
   -e SCRAPER_UNIFI_HOST=https://192.168.1.1 \
   -v $(pwd)/config.toml:/app/config.toml \
   -v $(pwd)/hosts.txt:/app/hosts.txt \
+  -v $(pwd)/scraper.db:/app/scraper.db \
   unifi-dns-scraper
 ```
 
 When using Option 2 with environment variables, the values provided via environment variables will override any corresponding values in the config.toml file.
 
-## Usage
+## Using Locally without Docker
+
+This program, like most golang programs, compiles down to a single binary, so it's pretty easy to just drop it somewhere on your system and run it through `cron` if that's your vibe.
 
 ```bash
 ./unifi-dns-scraper -config config.toml
@@ -100,6 +106,10 @@ This block contains settings for processing the hostname data:
 * **`domains`**: A list of strings that represent the domains that will be appended to each of the hostnames.
 * **`additional`**: A list of objects, each containing an `ip` and `name` field. This can be used to inject additional hostnames into your host file for systems that don't appear in the Unifi interface.
 * **`blocked`**: A list of objects, with an `ip` and `name`, or just an `ip`, or just a `name` that is used to block those entries from appearing in your output. The use case for this is that that I have a device that keeps on bouncing over to another IP address and I don't want that entry appearing in my host file. This can also be used to ensure that some devices don't get hostnames in the file for other reasons.
+* **`cnames`**: A list of objects, each containing a `cname` and `hostname` field. This defines CNAME records that point one hostname to another:
+  * When writing to a hosts file, CNAMEs are added as additional hostnames to the IP address entry of the target hostname
+  * When writing to a database, proper CNAME record types are created
+  * If the target hostname doesn't exist in your hostmap (i.e., the hostname doesn't have an IP address), a warning will be displayed
 * **`keep_macs`**: A boolean (`true`/`false`) that indicates whether or not hostnames that are returned as MAC addresses should be included. Defaults to `false`. I haven't yet figured out what causes this, but hostnames with colons are not valid hostnames.
 
 ### The **`[hostsfile]`** block
@@ -131,6 +141,10 @@ Sleep = 60
 domains = ["example.local", "device.example.local", "home.local"]
 additional = [{ ip = "192.168.1.1", name = "unifi" }]
 blocked = [{ ip = "192.168.90.2", name = "naughtyhost" }]
+cnames = [
+  { cname = "mail.example.local", hostname = "server1.example.local" },
+  { cname = "www.example.local", hostname = "webserver.example.local" }
+]
 keep_macs = false
 
 [unifi]

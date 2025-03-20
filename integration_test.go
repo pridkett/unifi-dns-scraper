@@ -52,6 +52,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 				Name      string
 			}
 			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
 			KeepMacs bool
 		}{
 			Domains: []string{"test.local", "example.com"},

@@ -41,6 +41,10 @@ type TomlConfig struct {
 			IP   string
 			Name string
 		}
+		Cnames []struct {
+			Cname    string
+			Hostname string
+		}
 		KeepMacs bool
 	}
 	Hostsfile HostsfileConfig
@@ -190,12 +194,49 @@ func SaveHostsFile(hostmaps []*Hostmap, cfg *TomlConfig) error {
 
 	builder.WriteString("# This file created by unifi-dns-scraper\n")
 	builder.WriteString("# Do not manually edit\n\n")
+
+	// Create a map of hostnames to IPs for CNAME resolution
+	hostnameMap := make(map[string]netip.Addr)
 	for _, hm := range hostmaps {
 		if hm.removalCode != NotRemoved {
 			continue
 		}
 
-		builder.WriteString(fmt.Sprintf("%s %s\n", hm.ip, strings.Join(hm.fqdns, " ")))
+		// Add all FQDNs to the map for lookup
+		for _, fqdn := range hm.fqdns {
+			hostnameMap[fqdn] = hm.ip
+		}
+	}
+
+	// Process CNAMEs for hosts file
+	cnameAdditions := make(map[netip.Addr][]string)
+	for _, cname := range cfg.Processing.Cnames {
+		// Try to find the target hostname
+		if ip, exists := hostnameMap[cname.Hostname]; exists {
+			// Add this CNAME to the IP's list of hostnames
+			cnameAdditions[ip] = append(cnameAdditions[ip], cname.Cname)
+
+			// Also add the CNAME to the map so nested CNAMEs would work
+			hostnameMap[cname.Cname] = ip
+		} else {
+			logger.Warnf("CNAME target '%s' for '%s' not found in hosts, skipping", cname.Hostname, cname.Cname)
+		}
+	}
+
+	// Write the hosts entries with any CNAMEs added
+	for _, hm := range hostmaps {
+		if hm.removalCode != NotRemoved {
+			continue
+		}
+
+		// Get additional CNAMEs for this IP
+		additionalNames := cnameAdditions[hm.ip]
+
+		// Combine original FQDNs with CNAMEs
+		allNames := append([]string{}, hm.fqdns...)
+		allNames = append(allNames, additionalNames...)
+
+		builder.WriteString(fmt.Sprintf("%s %s\n", hm.ip, strings.Join(allNames, " ")))
 	}
 
 	err := os.WriteFile(cfg.Hostsfile.Filename, []byte(builder.String()), 0666)

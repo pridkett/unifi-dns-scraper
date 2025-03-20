@@ -94,6 +94,7 @@ func TestSaveDatabase(t *testing.T) {
 				Name      string
 			}
 			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
 			KeepMacs bool
 		}{
 			Domains: []string{"local", "example.com"},
