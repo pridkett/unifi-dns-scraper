@@ -335,9 +335,10 @@ func removeOldHostsByTime(m []*Hostmap, d time.Duration) []*Hostmap {
 	return m
 }
 
-// remove all hosts from the hostmap that have a MAC address in the hostname
-// I still don't know why this happens sometimes
-func removeMACHosts(m []*Hostmap) []*Hostmap {
+// processMACHostnames handles hosts that have a MAC address in the hostname
+// If KeepMacs is false, it removes the MAC addresses
+// If KeepMacs is true, it keeps them but replaces ':' with '-'
+func processMACHostnames(m []*Hostmap, cfg *TomlConfig) []*Hostmap {
 	hosts_modified := 0
 	hostnames_modified := 0
 	for _, host := range m {
@@ -348,6 +349,11 @@ func removeMACHosts(m []*Hostmap) []*Hostmap {
 				hostnames = append(hostnames, hostname)
 			} else {
 				hostnames_modified++
+				if cfg.Processing.KeepMacs {
+					// Replace ':' with '-' in MAC addresses and keep them
+					modifiedHostname := strings.ReplaceAll(hostname, ":", "-")
+					hostnames = append(hostnames, modifiedHostname)
+				}
 			}
 		}
 		if len(hostnames) != len(originalHostnames) {
@@ -361,7 +367,12 @@ func removeMACHosts(m []*Hostmap) []*Hostmap {
 			host.hostnames = originalHostnames
 		}
 	}
-	logger.Infof("Removed %d MAC address hostnames from %d hosts", hostnames_modified, hosts_modified)
+
+	if cfg.Processing.KeepMacs {
+		logger.Infof("Modified %d MAC address hostnames (replaced ':' with '-') from %d hosts", hostnames_modified, hosts_modified)
+	} else {
+		logger.Infof("Removed %d MAC address hostnames from %d hosts", hostnames_modified, hosts_modified)
+	}
 	return m
 }
 
@@ -480,9 +491,7 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 
 	// blocked hosts get removed first - otherwise their "correct" IP address
 	// may be hidden by one of the incorrect host addresses
-	if !cfg.Processing.KeepMacs {
-		hostmaps = removeMACHosts(hostmaps)
-	}
+	hostmaps = processMACHostnames(hostmaps, cfg)
 
 	hostmaps = removeBlockedHosts(hostmaps, cfg)
 	hostmaps = removeDuplicateHosts(hostmaps)

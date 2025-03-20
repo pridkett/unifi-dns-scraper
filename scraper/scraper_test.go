@@ -15,25 +15,6 @@ func createIP(ipaddr string) netip.Addr {
 	return ip
 }
 
-// Helper function to create test hostmaps
-func setupTestHostmaps(t *testing.T) []*Hostmap {
-	t.Helper()
-	var hostmaps []*Hostmap
-
-	hostmaps = append(hostmaps, &Hostmap{
-		ip:        createIP("192.168.1.1"),
-		hostnames: []string{"host1"},
-		lastseen:  time.Now(),
-	})
-	hostmaps = append(hostmaps, &Hostmap{
-		ip:        createIP("192.168.1.2"),
-		hostnames: []string{"host2"},
-		lastseen:  time.Now(),
-	})
-
-	return hostmaps
-}
-
 func TestRemoveOldHosts(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -180,31 +161,75 @@ func TestRemoveOldHostsByTime(t *testing.T) {
 	})
 }
 
-func TestRemoveMACHosts(t *testing.T) {
+func TestProcessMACHostnames(t *testing.T) {
 	tests := []struct {
 		name           string
 		hostmaps       []*Hostmap
+		keepMacs       bool
 		wantCount      int
 		wantValidCount int
+		wantCheckFunc  func(t *testing.T, hosts []*Hostmap)
 	}{
 		{
-			name: "MAC addresses are removed",
+			name: "MAC addresses are removed when KeepMacs=false",
 			hostmaps: []*Hostmap{
 				{ip: createIP("192.168.1.1"), hostnames: []string{"00:00:00:00:00:00"}, lastseen: time.Now()},
 				{ip: createIP("192.168.1.2"), hostnames: []string{"host2"}, lastseen: time.Now()},
 				{ip: createIP("192.168.1.3"), hostnames: []string{"00:00:00:00:00:00", "testhost"}, lastseen: time.Now()},
 			},
+			keepMacs:       false,
 			wantCount:      3, // Total hostmaps
 			wantValidCount: 2, // Hostmaps with valid names after filtering
+			wantCheckFunc:  nil,
+		},
+		{
+			name: "MAC addresses are converted when KeepMacs=true",
+			hostmaps: []*Hostmap{
+				{ip: createIP("192.168.1.1"), hostnames: []string{"00:00:00:00:00:00"}, lastseen: time.Now()},
+				{ip: createIP("192.168.1.2"), hostnames: []string{"host2"}, lastseen: time.Now()},
+				{ip: createIP("192.168.1.3"), hostnames: []string{"00:00:00:00:00:00", "testhost"}, lastseen: time.Now()},
+			},
+			keepMacs:       true,
+			wantCount:      3, // Total hostmaps
+			wantValidCount: 3, // All hosts should be valid
+			wantCheckFunc: func(t *testing.T, hosts []*Hostmap) {
+				// Check that MAC addresses were converted to use hyphens
+				for _, host := range hosts {
+					for _, hostname := range host.hostnames {
+						if hostname == "00-00-00-00-00-00" {
+							// Found a converted MAC address, test passed
+							return
+						}
+					}
+				}
+				t.Errorf("processMACHostnames() did not convert any MAC addresses when KeepMacs=true")
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := removeMACHosts(tt.hostmaps)
+			// Create a test config with the appropriate KeepMacs setting
+			cfg := &TomlConfig{
+				Processing: struct {
+					Domains    []string
+					Additional []struct {
+						IP        string
+						Hostnames []string
+						Name      string
+					}
+					Blocked  []struct{ IP, Name string }
+					Cnames   []struct{ Cname, Hostname string }
+					KeepMacs bool
+				}{
+					KeepMacs: tt.keepMacs,
+				},
+			}
+
+			got := processMACHostnames(tt.hostmaps, cfg)
 
 			if len(got) != tt.wantCount {
-				t.Errorf("removeMACHosts() returned %d hosts, want %d", len(got), tt.wantCount)
+				t.Errorf("processMACHostnames() returned %d hosts, want %d", len(got), tt.wantCount)
 			}
 
 			validCount := 0
@@ -215,7 +240,12 @@ func TestRemoveMACHosts(t *testing.T) {
 			}
 
 			if validCount != tt.wantValidCount {
-				t.Errorf("removeMACHosts() kept %d valid hosts, want %d", validCount, tt.wantValidCount)
+				t.Errorf("processMACHostnames() kept %d valid hosts, want %d", validCount, tt.wantValidCount)
+			}
+
+			// Run additional checks if provided
+			if tt.wantCheckFunc != nil {
+				tt.wantCheckFunc(t, got)
 			}
 		})
 	}
