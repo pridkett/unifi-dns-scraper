@@ -47,9 +47,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 		Processing: struct {
 			Domains    []string
 			Additional []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}
 			Blocked  []struct{ IP, Name string }
 			Cnames   []struct{ Cname, Hostname string }
@@ -57,11 +58,12 @@ func TestIntegrationWorkflow(t *testing.T) {
 		}{
 			Domains: []string{"test.local", "example.com"},
 			Additional: []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}{
-				{IP: "192.168.1.1", Name: "router"},
+				{IP: "192.168.1.1", Name: "router", KeepMultiple: nil},
 			},
 			Blocked: []struct{ IP, Name string }{
 				{IP: "192.168.1.200", Name: "blocked-device"},

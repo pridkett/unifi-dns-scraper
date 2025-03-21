@@ -108,16 +108,13 @@ func TestRemoveOldHostsByTime(t *testing.T) {
 			{ip: createIP("192.168.1.2"), hostnames: []string{"host2"}, lastseen: now.Add(-2 * time.Hour), removalCode: NotRemoved},
 		}
 
-		// Use time.Second directly because the function already multiplies by the time.Duration
 		duration := time.Hour
 		result := removeOldHostsByTime(hostmaps, duration)
 
-		// The function marks hosts as removed but leaves them in the array
 		if len(result) != 2 {
 			t.Errorf("removeOldHostsByTime() returned %d hosts, want %d", len(result), 2)
 		}
 
-		// Count hosts by removal code
 		notRemovedCount := 0
 		oldCount := 0
 		for _, host := range result {
@@ -128,7 +125,6 @@ func TestRemoveOldHostsByTime(t *testing.T) {
 			}
 		}
 
-		// We expect the recent host to be kept and the old one marked for removal
 		if notRemovedCount != 1 {
 			t.Errorf("removeOldHostsByTime() kept %d hosts as NotRemoved, want %d", notRemovedCount, 1)
 		}
@@ -147,7 +143,6 @@ func TestRemoveOldHostsByTime(t *testing.T) {
 		duration := time.Hour
 		result := removeOldHostsByTime(hostmaps, duration)
 
-		// Check that all hosts are kept
 		notRemovedCount := 0
 		for _, host := range result {
 			if host.removalCode == NotRemoved {
@@ -178,8 +173,8 @@ func TestProcessMACHostnames(t *testing.T) {
 				{ip: createIP("192.168.1.3"), hostnames: []string{"00:00:00:00:00:00", "testhost"}, lastseen: time.Now()},
 			},
 			keepMacs:       false,
-			wantCount:      3, // Total hostmaps
-			wantValidCount: 2, // Hostmaps with valid names after filtering
+			wantCount:      3,
+			wantValidCount: 2,
 			wantCheckFunc:  nil,
 		},
 		{
@@ -190,14 +185,12 @@ func TestProcessMACHostnames(t *testing.T) {
 				{ip: createIP("192.168.1.3"), hostnames: []string{"00:00:00:00:00:00", "testhost"}, lastseen: time.Now()},
 			},
 			keepMacs:       true,
-			wantCount:      3, // Total hostmaps
-			wantValidCount: 3, // All hosts should be valid
+			wantCount:      3,
+			wantValidCount: 3,
 			wantCheckFunc: func(t *testing.T, hosts []*Hostmap) {
-				// Check that MAC addresses were converted to use hyphens
 				for _, host := range hosts {
 					for _, hostname := range host.hostnames {
 						if hostname == "00-00-00-00-00-00" {
-							// Found a converted MAC address, test passed
 							return
 						}
 					}
@@ -209,20 +202,29 @@ func TestProcessMACHostnames(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a test config with the appropriate KeepMacs setting
 			cfg := &TomlConfig{
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
 					KeepMacs: tt.keepMacs,
+					Domains:  nil,
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
+					Blocked: nil,
+					Cnames:  nil,
 				},
 			}
 
@@ -243,7 +245,6 @@ func TestProcessMACHostnames(t *testing.T) {
 				t.Errorf("processMACHostnames() kept %d valid hosts, want %d", validCount, tt.wantValidCount)
 			}
 
-			// Run additional checks if provided
 			if tt.wantCheckFunc != nil {
 				tt.wantCheckFunc(t, got)
 			}
@@ -288,7 +289,6 @@ func TestAddDomainsToHostmap(t *testing.T) {
 			t.Errorf("addDomainsToHostmap() got %d FQDNs, want %d", len(result.fqdns), 2)
 		}
 
-		// Check each FQDN individually since we know exactly what to expect
 		expectedFQDNs := []string{"host1.example.com", "host1.local"}
 		for i, expected := range expectedFQDNs {
 			if i < len(result.fqdns) && result.fqdns[i] != expected {
@@ -312,14 +312,11 @@ func TestAddDomainsToHostmap(t *testing.T) {
 			t.Errorf("addDomainsToHostmap() got %d FQDNs, want %d", len(result.fqdns), 4)
 		}
 
-		// Check each FQDN individually
 		expectedFQDNs := []string{
 			"host1.example.com", "host1.local",
 			"alias1.example.com", "alias1.local",
 		}
 
-		// Since the implementation might order them differently, we need to check that
-		// all expected FQDNs exist in the result.fqdns slice, without relying on order
 		for _, expected := range expectedFQDNs {
 			found := false
 			for _, actual := range result.fqdns {
@@ -353,14 +350,21 @@ func TestRemoveBlockedHosts(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "192.168.1.2", Name: "blocked"},
 					},
@@ -379,14 +383,21 @@ func TestRemoveBlockedHosts(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "192.168.90.2", Name: ""},
 					},
@@ -399,7 +410,6 @@ func TestRemoveBlockedHosts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a deep copy of hostmaps to avoid modifying the test data
 			var hostmapsCopy []*Hostmap
 			for _, h := range tt.hostmaps {
 				hostmapsCopy = append(hostmapsCopy, &Hostmap{
@@ -447,14 +457,21 @@ func TestCheckBlocked(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "192.168.90.2", Name: "powerwall"},
 					},
@@ -469,14 +486,21 @@ func TestCheckBlocked(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "192.168.90.2", Name: ""},
 					},
@@ -491,14 +515,21 @@ func TestCheckBlocked(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "", Name: "powerwall"},
 					},
@@ -513,14 +544,21 @@ func TestCheckBlocked(t *testing.T) {
 				Processing: struct {
 					Domains    []string
 					Additional []struct {
-						IP        string
-						Hostnames []string
-						Name      string
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
 					}
 					Blocked  []struct{ IP, Name string }
 					Cnames   []struct{ Cname, Hostname string }
 					KeepMacs bool
 				}{
+					Additional: []struct {
+						IP           string
+						Hostnames    []string
+						Name         string
+						KeepMultiple *bool
+					}{},
 					Blocked: []struct{ IP, Name string }{
 						{IP: "192.168.90.2", Name: "powerwall"},
 					},

@@ -89,9 +89,10 @@ func TestSaveDatabase(t *testing.T) {
 		Processing: struct {
 			Domains    []string
 			Additional []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}
 			Blocked  []struct{ IP, Name string }
 			Cnames   []struct{ Cname, Hostname string }

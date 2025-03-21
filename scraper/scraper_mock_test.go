@@ -22,9 +22,10 @@ func TestGenerateHostsFileWithMock(t *testing.T) {
 		Processing: struct {
 			Domains    []string
 			Additional []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}
 			Blocked  []struct{ IP, Name string }
 			Cnames   []struct{ Cname, Hostname string }
@@ -32,11 +33,12 @@ func TestGenerateHostsFileWithMock(t *testing.T) {
 		}{
 			Domains: []string{"test.local"},
 			Additional: []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}{
-				{IP: "192.168.1.1", Name: "gateway"},
+				{IP: "192.168.1.1", Name: "gateway", KeepMultiple: nil},
 			},
 		},
 	}
@@ -124,9 +126,10 @@ func TestErrorHandlingWithMock(t *testing.T) {
 		Processing: struct {
 			Domains    []string
 			Additional []struct {
-				IP        string
-				Hostnames []string
-				Name      string
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
 			}
 			Blocked  []struct{ IP, Name string }
 			Cnames   []struct{ Cname, Hostname string }

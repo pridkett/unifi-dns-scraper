@@ -1,3 +1,6 @@
+//go:build !standalone_test
+// +build !standalone_test
+
 package main
 
 import (
@@ -21,13 +24,13 @@ var (
 
 // set up a global logger...
 // see: https://stackoverflow.com/a/43827612/57626
-var logger *log.Logger
+var globalLogger *log.Logger
 
 func main() {
 	var config scraper.TomlConfig
 
-	logger = log.New(os.Stderr).WithColor()
-	scraper.SetLogger(logger)
+	globalLogger = log.New(os.Stderr).WithColor()
+	scraper.SetLogger(globalLogger)
 
 	// Command line flags
 	configFile := flag.String("config", "", "Filename with configuration")
@@ -49,9 +52,9 @@ func main() {
 	loop_count := 0
 	for {
 		loop_count++
-		logger.Infof("** Starting loop %d **", loop_count)
+		globalLogger.Infof("** Starting loop %d **", loop_count)
 		if *configFile != "" {
-			logger.Infof("opening configuration file: %s", *configFile)
+			globalLogger.Infof("opening configuration file: %s", *configFile)
 			f, err := os.Open(*configFile)
 			if err != nil {
 				panic(err)
@@ -64,28 +67,28 @@ func main() {
 			// Update config from environment variables (environment variables will override TOML values)
 			scraper.UpdateConfigFromEnv(&config)
 		} else {
-			logger.Fatal("Must specify configuration file with -config FILENAME")
+			globalLogger.Fatal("Must specify configuration file with -config FILENAME")
 		}
 
 		// only connect to the database the first time through the loop
 		if config.Database.Driver != "" && config.Database.DSN != "" && db == nil {
 			db, err = scraper.OpenDatabase(config.Database.Driver, config.Database.DSN)
 			if err != nil {
-				logger.Fatalf("Fatal error opening database: %s", err)
+				globalLogger.Fatalf("Fatal error opening database: %s", err)
 			}
 
 			// Ensure the database connection is closed when no longer needed
 			sqlDB, err := db.DB()
 			if err != nil {
-				logger.Fatalf("Error trying to get underlying database connection: %s", err)
+				globalLogger.Fatalf("Error trying to get underlying database connection: %s", err)
 			}
 			defer sqlDB.Close()
-			logger.Infof("Database connection opened driver=%s", config.Database.Driver)
+			globalLogger.Infof("Database connection opened driver=%s", config.Database.Driver)
 		}
 
-		hostmaps, err := scraper.GenerateHostsFile(&config, hostmaps)
+		hostmaps, err = scraper.GenerateHostsFile(&config, hostmaps)
 		if err != nil {
-			logger.Fatalf("Fatal error generating hosts file: %s", err)
+			globalLogger.Fatalf("Fatal error generating hosts file: %s", err)
 		}
 
 		if config.Hostsfile != (scraper.HostsfileConfig{}) {
@@ -101,8 +104,8 @@ func main() {
 			if sleep_dur == 0 {
 				sleep_dur = 120
 			}
-			logger.Infof("Sleeping for %d seconds", sleep_dur)
-			logger.Infof("** Ending loop %d **", loop_count)
+			globalLogger.Infof("Sleeping for %d seconds", sleep_dur)
+			globalLogger.Infof("** Ending loop %d **", loop_count)
 			time.Sleep(time.Duration(sleep_dur) * time.Second)
 		} else {
 			break
