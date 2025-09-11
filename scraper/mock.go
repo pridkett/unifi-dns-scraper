@@ -1,7 +1,7 @@
 package scraper
 
 import (
-	"github.com/unpoller/unifi"
+	"github.com/unpoller/unifi/v5"
 )
 
 // MockUnifiClient implements a mock for the Unifi API client for testing

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unpoller/unifi"
+	"github.com/unpoller/unifi/v5"
 	"github.com/withmandala/go-log"
 )
 
@@ -534,6 +534,8 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 		// logger.Infof("%d, %s %s %s %s %d", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen)
 		var m Hostmap
 		var err error
+		var safeName string = strings.ReplaceAll(client.Name, " ", "-")
+
 		m.lastseenUnifi = time.Unix(int64(client.LastSeen.Val), 0)
 		m.lastseen = time.Now()
 		m.ip, err = netip.ParseAddr(client.IP)
@@ -541,13 +543,15 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 			logger.Warnf("Error Parsing Record: line=%d, ID=%s, hostname=%s, IP=%s, name=%s, lastseen=%f", i+1, client.ID, client.Hostname, client.IP, client.Name, client.LastSeen.Val)
 			continue
 		}
-		m.hostnames = append(m.hostnames, client.Name)
+		m.hostnames = append(m.hostnames, safeName)
 		hostmaps = append(hostmaps, addDomainsToHostmap(&m, cfg.Processing.Domains))
 	}
 
 	for _, usw := range switches {
 		var m Hostmap
 		var err error
+		var safeName string = strings.ReplaceAll(usw.Name, " ", "-")
+
 		m.ip, err = netip.ParseAddr(usw.IP)
 
 		m.lastseenUnifi = time.Unix(int64(usw.LastSeen.Val), 0)
@@ -558,13 +562,15 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 			continue
 		}
 
-		m.hostnames = append(m.hostnames, usw.Name)
+		m.hostnames = append(m.hostnames, safeName)
 		hostmaps = append(hostmaps, addDomainsToHostmap(&m, cfg.Processing.Domains))
 	}
 
 	for _, ap := range aps {
 		var m Hostmap
 		var err error
+		var safeName string = strings.ReplaceAll(ap.Name, " ", "-")
+
 		m.ip, err = netip.ParseAddr(ap.IP)
 		m.lastseenUnifi = time.Unix(int64(ap.LastSeen.Val), 0)
 		m.lastseen = time.Now()
@@ -574,7 +580,7 @@ func createHostmap(clients []*unifi.Client, switches []*unifi.USW, aps []*unifi.
 			continue
 		}
 
-		m.hostnames = append(m.hostnames, ap.Name)
+		m.hostnames = append(m.hostnames, safeName)
 		hostmaps = append(hostmaps, addDomainsToHostmap(&m, cfg.Processing.Domains))
 	}
 
