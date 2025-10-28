@@ -2,8 +2,12 @@ package scraper
 
 import (
 	"net/netip"
+	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/withmandala/go-log"
 )
 
 // Helper function to create IP addresses for testing
@@ -575,5 +579,209 @@ func TestCheckBlocked(t *testing.T) {
 				t.Errorf("checkBlocked() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSaveHostsFileWithCNAME tests that SaveHostsFile handles CNAMEs with normalization
+func TestSaveHostsFileWithCNAME(t *testing.T) {
+	// Create a temporary hosts file
+	tmpFile, err := os.CreateTemp("", "hosts-cname-test-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	// Set up test data with hosts
+	hostmaps := []*Hostmap{
+		{
+			ip:          createIP("192.168.1.100"),
+			hostnames:   []string{"webserver"},
+			fqdns:       []string{"webserver.example.com"},
+			lastseen:    time.Now(),
+			removalCode: NotRemoved,
+		},
+		{
+			ip:          createIP("192.168.1.101"),
+			hostnames:   []string{"mailserver"},
+			fqdns:       []string{"mailserver.example.com"},
+			lastseen:    time.Now(),
+			removalCode: NotRemoved,
+		},
+		{
+			ip:          createIP("192.168.1.102"),
+			hostnames:   []string{"docker-services"},
+			fqdns:       []string{"docker-services.wagstrom.net"},
+			lastseen:    time.Now(),
+			removalCode: NotRemoved,
+		},
+	}
+
+	// Create a config with CNAME entries
+	// Test both with and without trailing dots to ensure normalization works
+	config := &TomlConfig{
+		Processing: struct {
+			Domains    []string
+			Additional []struct {
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
+			}
+			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
+			KeepMacs bool
+		}{
+			Domains: []string{"example.com"},
+			Cnames: []struct{ Cname, Hostname string }{
+				{Cname: "www.example.com", Hostname: "webserver.example.com"},                        // without trailing dots
+				{Cname: "mail.example.com.", Hostname: "mailserver.example.com."},                   // with trailing dots
+				{Cname: "paperless-ngx.wagstrom.net", Hostname: "docker-services.wagstrom.net."},   // Real case: target with trailing dot
+			},
+		},
+		Hostsfile: HostsfileConfig{
+			Filename: tmpFile.Name(),
+		},
+	}
+
+	// Set up global logger for testing
+	if logger == nil {
+		logger = log.New(os.Stderr)
+	}
+
+	// Save to hosts file
+	err = SaveHostsFile(hostmaps, config)
+	if err != nil {
+		t.Errorf("SaveHostsFile() error = %v", err)
+		return
+	}
+
+	// Read the hosts file content
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Errorf("Failed to read hosts file: %v", err)
+		return
+	}
+
+	hostsContent := string(content)
+
+	// Verify that CNAMEs are present in the hosts file
+	if !strings.Contains(hostsContent, "www.example.com") {
+		t.Errorf("Hosts file missing CNAME 'www.example.com'")
+	}
+
+	if !strings.Contains(hostsContent, "mail.example.com") {
+		t.Errorf("Hosts file missing CNAME 'mail.example.com'")
+	}
+
+	if !strings.Contains(hostsContent, "paperless-ngx.wagstrom.net") {
+		t.Errorf("Hosts file missing CNAME 'paperless-ngx.wagstrom.net' (target had trailing dot in config)")
+	}
+
+	// Verify that the CNAMEs are associated with the correct IPs
+	lines := strings.Split(hostsContent, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		if strings.Contains(line, "192.168.1.100") {
+			if !strings.Contains(line, "www.example.com") {
+				t.Errorf("Expected CNAME 'www.example.com' on line with IP 192.168.1.100, got: %s", line)
+			}
+			if !strings.Contains(line, "webserver.example.com") {
+				t.Errorf("Expected hostname 'webserver.example.com' on line with IP 192.168.1.100, got: %s", line)
+			}
+		}
+
+		if strings.Contains(line, "192.168.1.101") {
+			if !strings.Contains(line, "mail.example.com") {
+				t.Errorf("Expected CNAME 'mail.example.com' on line with IP 192.168.1.101, got: %s", line)
+			}
+			if !strings.Contains(line, "mailserver.example.com") {
+				t.Errorf("Expected hostname 'mailserver.example.com' on line with IP 192.168.1.101, got: %s", line)
+			}
+		}
+
+		if strings.Contains(line, "192.168.1.102") {
+			if !strings.Contains(line, "paperless-ngx.wagstrom.net") {
+				t.Errorf("Expected CNAME 'paperless-ngx.wagstrom.net' on line with IP 192.168.1.102, got: %s", line)
+			}
+			if !strings.Contains(line, "docker-services.wagstrom.net") {
+				t.Errorf("Expected hostname 'docker-services.wagstrom.net' on line with IP 192.168.1.102, got: %s", line)
+			}
+		}
+	}
+}
+
+// TestSaveHostsFileWithCNAMENotFound tests that CNAMEs with non-existent targets are skipped
+func TestSaveHostsFileWithCNAMENotFound(t *testing.T) {
+	// Create a temporary hosts file
+	tmpFile, err := os.CreateTemp("", "hosts-cname-notfound-test-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	// Set up test data with hosts
+	hostmaps := []*Hostmap{
+		{
+			ip:          createIP("192.168.1.100"),
+			hostnames:   []string{"webserver"},
+			fqdns:       []string{"webserver.example.com"},
+			lastseen:    time.Now(),
+			removalCode: NotRemoved,
+		},
+	}
+
+	// Create a config with CNAME pointing to non-existent host
+	config := &TomlConfig{
+		Processing: struct {
+			Domains    []string
+			Additional []struct {
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
+			}
+			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
+			KeepMacs bool
+		}{
+			Domains: []string{"example.com"},
+			Cnames: []struct{ Cname, Hostname string }{
+				{Cname: "www.example.com", Hostname: "nonexistent.example.com"},
+			},
+		},
+		Hostsfile: HostsfileConfig{
+			Filename: tmpFile.Name(),
+		},
+	}
+
+	// Set up global logger for testing
+	if logger == nil {
+		logger = log.New(os.Stderr)
+	}
+
+	// Save to hosts file
+	err = SaveHostsFile(hostmaps, config)
+	if err != nil {
+		t.Errorf("SaveHostsFile() error = %v", err)
+		return
+	}
+
+	// Read the hosts file content
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Errorf("Failed to read hosts file: %v", err)
+		return
+	}
+
+	hostsContent := string(content)
+
+	// Verify that the CNAME for non-existent target is NOT present
+	if strings.Contains(hostsContent, "www.example.com") {
+		t.Errorf("Hosts file should not contain CNAME 'www.example.com' for non-existent target")
 	}
 }

@@ -197,6 +197,7 @@ func SaveHostsFile(hostmaps []*Hostmap, cfg *TomlConfig) error {
 	builder.WriteString("# Do not manually edit\n\n")
 
 	// Create a map of hostnames to IPs for CNAME resolution
+	// Normalize hostnames for consistent lookups
 	hostnameMap := make(map[string]netip.Addr)
 	for _, hm := range hostmaps {
 		if hm.removalCode != NotRemoved {
@@ -205,20 +206,25 @@ func SaveHostsFile(hostmaps []*Hostmap, cfg *TomlConfig) error {
 
 		// Add all FQDNs to the map for lookup
 		for _, fqdn := range hm.fqdns {
-			hostnameMap[fqdn] = hm.ip
+			hostnameMap[normalizeHostname(fqdn)] = hm.ip
 		}
 	}
 
 	// Process CNAMEs for hosts file
 	cnameAdditions := make(map[netip.Addr][]string)
 	for _, cname := range cfg.Processing.Cnames {
+		// Normalize for lookup
+		normalizedTarget := normalizeHostname(cname.Hostname)
+		normalizedCname := normalizeHostname(cname.Cname)
+
 		// Try to find the target hostname
-		if ip, exists := hostnameMap[cname.Hostname]; exists {
+		if ip, exists := hostnameMap[normalizedTarget]; exists {
 			// Add this CNAME to the IP's list of hostnames
-			cnameAdditions[ip] = append(cnameAdditions[ip], cname.Cname)
+			// For hosts file, we don't need trailing dots
+			cnameAdditions[ip] = append(cnameAdditions[ip], normalizedCname)
 
 			// Also add the CNAME to the map so nested CNAMEs would work
-			hostnameMap[cname.Cname] = ip
+			hostnameMap[normalizedCname] = ip
 		} else {
 			logger.Warnf("CNAME target '%s' for '%s' not found in hosts, skipping", cname.Hostname, cname.Cname)
 		}

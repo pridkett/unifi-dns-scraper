@@ -5,31 +5,11 @@ import (
 
 	"github.com/pridkett/unifi-dns-scraper/sqlmodel"
 
-	"strings"
-
 	"github.com/glebarez/sqlite" // pure go sqlite driver
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
-
-// normalizeDNSName ensures a DNS name has a trailing dot (for FQDN format)
-// This is required for PowerDNS CNAME content fields
-func normalizeDNSName(name string) string {
-	if name == "" {
-		return name
-	}
-	if !strings.HasSuffix(name, ".") {
-		return name + "."
-	}
-	return name
-}
-
-// normalizeHostname strips the trailing dot from a DNS name for lookups
-// This ensures consistent map lookups regardless of whether the input has a trailing dot
-func normalizeHostname(name string) string {
-	return strings.TrimSuffix(name, ".")
-}
 
 func OpenDatabase(driver string, dsn string) (*gorm.DB, error) {
 	var db *gorm.DB
@@ -127,6 +107,7 @@ func SaveDatabase(db *gorm.DB, hostmaps []*Hostmap, config *TomlConfig) error {
 		// Normalize the target hostname for lookup
 		normalizedTarget := normalizeHostname(cname.Hostname)
 		normalizedCname := normalizeHostname(cname.Cname)
+		logger.Infof("Processing CNAME: %s -> %s", normalizedCname, normalizedTarget)
 
 		// First make sure the target hostname exists somewhere in our data
 		if _, exists := hostnameMap[normalizedTarget]; exists {
