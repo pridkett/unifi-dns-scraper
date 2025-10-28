@@ -785,3 +785,111 @@ func TestSaveHostsFileWithCNAMENotFound(t *testing.T) {
 		t.Errorf("Hosts file should not contain CNAME 'www.example.com' for non-existent target")
 	}
 }
+
+// TestSaveHostsFileWithCNAMEChaining tests CNAME chaining in hosts file
+func TestSaveHostsFileWithCNAMEChaining(t *testing.T) {
+	// Create a temporary hosts file
+	tmpFile, err := os.CreateTemp("", "hosts-cname-chain-test-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	// Set up test data with a base host
+	hostmaps := []*Hostmap{
+		{
+			ip:          createIP("192.168.1.100"),
+			hostnames:   []string{"docker-services"},
+			fqdns:       []string{"docker-services.example.com"},
+			lastseen:    time.Now(),
+			removalCode: NotRemoved,
+		},
+	}
+
+	// Create a config with CNAME chain: paperless-ai -> paperless-ngx -> docker-services
+	config := &TomlConfig{
+		Processing: struct {
+			Domains    []string
+			Additional []struct {
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
+			}
+			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
+			KeepMacs bool
+		}{
+			Domains: []string{"example.com"},
+			Cnames: []struct{ Cname, Hostname string }{
+				{Cname: "paperless-ai.example.com", Hostname: "paperless-ngx.example.com"},     // CNAME -> CNAME
+				{Cname: "paperless-ngx.example.com", Hostname: "docker-services.example.com"}, // CNAME -> A
+			},
+		},
+		Hostsfile: HostsfileConfig{
+			Filename: tmpFile.Name(),
+		},
+	}
+
+	// Set up global logger for testing
+	if logger == nil {
+		logger = log.New(os.Stderr)
+	}
+
+	// Save to hosts file
+	err = SaveHostsFile(hostmaps, config)
+	if err != nil {
+		t.Errorf("SaveHostsFile() error = %v", err)
+		return
+	}
+
+	// Read the hosts file content
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Errorf("Failed to read hosts file: %v", err)
+		return
+	}
+
+	hostsContent := string(content)
+
+	// Verify that both CNAMEs are present and resolved to the same IP
+	if !strings.Contains(hostsContent, "paperless-ai.example.com") {
+		t.Errorf("Hosts file missing chained CNAME 'paperless-ai.example.com'")
+	}
+
+	if !strings.Contains(hostsContent, "paperless-ngx.example.com") {
+		t.Errorf("Hosts file missing intermediate CNAME 'paperless-ngx.example.com'")
+	}
+
+	if !strings.Contains(hostsContent, "docker-services.example.com") {
+		t.Errorf("Hosts file missing base hostname 'docker-services.example.com'")
+	}
+
+	// Verify all three names are on the same line (same IP: 192.168.1.100)
+	lines := strings.Split(hostsContent, "\n")
+	foundLine := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		if strings.Contains(line, "192.168.1.100") {
+			foundLine = true
+			// All three should be on this line
+			if !strings.Contains(line, "docker-services.example.com") {
+				t.Errorf("Expected 'docker-services.example.com' on line with 192.168.1.100, got: %s", line)
+			}
+			if !strings.Contains(line, "paperless-ngx.example.com") {
+				t.Errorf("Expected 'paperless-ngx.example.com' on line with 192.168.1.100, got: %s", line)
+			}
+			if !strings.Contains(line, "paperless-ai.example.com") {
+				t.Errorf("Expected 'paperless-ai.example.com' on line with 192.168.1.100, got: %s", line)
+			}
+		}
+	}
+
+	if !foundLine {
+		t.Error("No line found with IP 192.168.1.100")
+	}
+}

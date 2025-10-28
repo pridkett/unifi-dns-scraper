@@ -211,21 +211,48 @@ func SaveHostsFile(hostmaps []*Hostmap, cfg *TomlConfig) error {
 	}
 
 	// Process CNAMEs for hosts file
+	// For hosts files, we need to resolve CNAME chains to their final IP
+	// We may need multiple passes to handle CNAME -> CNAME -> A chains
 	cnameAdditions := make(map[netip.Addr][]string)
+	processedCnames := make(map[string]bool)
+	maxIterations := len(cfg.Processing.Cnames) + 1 // Prevent infinite loops
+
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		progressMade := false
+
+		for _, cname := range cfg.Processing.Cnames {
+			normalizedCname := normalizeHostname(cname.Cname)
+
+			// Skip if already processed
+			if processedCnames[normalizedCname] {
+				continue
+			}
+
+			normalizedTarget := normalizeHostname(cname.Hostname)
+
+			// Try to find the target hostname (could be A record or already-processed CNAME)
+			if ip, exists := hostnameMap[normalizedTarget]; exists {
+				// Add this CNAME to the IP's list of hostnames
+				// For hosts file, we don't need trailing dots
+				cnameAdditions[ip] = append(cnameAdditions[ip], normalizedCname)
+
+				// Also add the CNAME to the map so chained CNAMEs can resolve
+				hostnameMap[normalizedCname] = ip
+				processedCnames[normalizedCname] = true
+				progressMade = true
+			}
+		}
+
+		// If we didn't process any new CNAMEs this iteration, we're done
+		if !progressMade {
+			break
+		}
+	}
+
+	// Warn about any unresolved CNAMEs
 	for _, cname := range cfg.Processing.Cnames {
-		// Normalize for lookup
-		normalizedTarget := normalizeHostname(cname.Hostname)
 		normalizedCname := normalizeHostname(cname.Cname)
-
-		// Try to find the target hostname
-		if ip, exists := hostnameMap[normalizedTarget]; exists {
-			// Add this CNAME to the IP's list of hostnames
-			// For hosts file, we don't need trailing dots
-			cnameAdditions[ip] = append(cnameAdditions[ip], normalizedCname)
-
-			// Also add the CNAME to the map so nested CNAMEs would work
-			hostnameMap[normalizedCname] = ip
-		} else {
+		if !processedCnames[normalizedCname] {
 			logger.Warnf("CNAME target '%s' for '%s' not found in hosts, skipping", cname.Hostname, cname.Cname)
 		}
 	}

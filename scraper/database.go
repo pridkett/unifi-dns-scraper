@@ -102,35 +102,70 @@ func SaveDatabase(db *gorm.DB, hostmaps []*Hostmap, config *TomlConfig) error {
 		}
 	}
 
-	// Process CNAME records
+	// Build a map of all CNAME targets from config for CNAME chaining support
+	// This allows CNAME -> CNAME -> A record chains
+	cnameTargetMap := make(map[string]bool)
 	for _, cname := range config.Processing.Cnames {
-		// Normalize the target hostname for lookup
-		normalizedTarget := normalizeHostname(cname.Hostname)
-		normalizedCname := normalizeHostname(cname.Cname)
-		logger.Infof("Processing CNAME: %s -> %s", normalizedCname, normalizedTarget)
+		cnameTargetMap[normalizeHostname(cname.Cname)] = true
+	}
 
-		// First make sure the target hostname exists somewhere in our data
-		if _, exists := hostnameMap[normalizedTarget]; exists {
-			// CNAME content must have trailing dot for PowerDNS
-			cnameContent := normalizeDNSName(cname.Hostname)
+	// Process CNAME records
+	// We may need multiple passes to resolve CNAME chains, so keep trying until no progress
+	processedCnames := make(map[string]bool)
+	maxIterations := len(config.Processing.Cnames) + 1 // Prevent infinite loops
 
-			if record, ok := cnameMap[normalizedCname]; ok {
-				// Update existing CNAME if the target changed
-				// Compare normalized versions to avoid unnecessary updates
-				if normalizeHostname(record.Content) != normalizedTarget {
-					record.Content = cnameContent
-					updateRecords = append(updateRecords, record)
-				}
-			} else {
-				// Create new CNAME record
-				newRecords = append(newRecords, sqlmodel.Record{
-					Name:    normalizedCname,
-					Type:    "CNAME",
-					Content: cnameContent,
-					Ttl:     3600,
-				})
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		progressMade := false
+
+		for _, cname := range config.Processing.Cnames {
+			normalizedCname := normalizeHostname(cname.Cname)
+
+			// Skip if already processed
+			if processedCnames[normalizedCname] {
+				continue
 			}
-		} else {
+
+			normalizedTarget := normalizeHostname(cname.Hostname)
+
+			// Check if target exists as an A record OR as a CNAME we've already processed
+			// This allows CNAME chaining: CNAME -> CNAME -> A
+			targetExists := hostnameMap[normalizedTarget] || processedCnames[normalizedTarget]
+
+			if targetExists {
+				// CNAME content must have trailing dot for PowerDNS
+				cnameContent := normalizeDNSName(cname.Hostname)
+
+				if record, ok := cnameMap[normalizedCname]; ok {
+					// Update existing CNAME if the target changed
+					if normalizeHostname(record.Content) != normalizedTarget {
+						record.Content = cnameContent
+						updateRecords = append(updateRecords, record)
+					}
+				} else {
+					// Create new CNAME record
+					newRecords = append(newRecords, sqlmodel.Record{
+						Name:    normalizedCname,
+						Type:    "CNAME",
+						Content: cnameContent,
+						Ttl:     3600,
+					})
+				}
+
+				processedCnames[normalizedCname] = true
+				progressMade = true
+			}
+		}
+
+		// If we didn't process any new CNAMEs this iteration, we're done
+		if !progressMade {
+			break
+		}
+	}
+
+	// Warn about any unresolved CNAMEs
+	for _, cname := range config.Processing.Cnames {
+		normalizedCname := normalizeHostname(cname.Cname)
+		if !processedCnames[normalizedCname] {
 			logger.Warnf("CNAME target '%s' for '%s' not found in hosts, skipping database entry",
 				cname.Hostname, cname.Cname)
 		}

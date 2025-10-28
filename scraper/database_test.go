@@ -471,3 +471,103 @@ func TestSaveDatabaseCNAMENotFound(t *testing.T) {
 		t.Errorf("Expected 0 CNAME records for non-existent target, got %d", len(cnameRecords))
 	}
 }
+
+// TestSaveDatabaseWithCNAMEChaining tests CNAME -> CNAME -> A record chains
+func TestSaveDatabaseWithCNAMEChaining(t *testing.T) {
+	// Create a temporary in-memory database
+	db, err := OpenDatabase("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory database: %v", err)
+	}
+
+	// Set up test data with a base host
+	hostmaps := []*Hostmap{
+		{
+			ip:          createIP("192.168.1.100"),
+			hostnames:   []string{"docker-services"},
+			fqdns:       []string{"docker-services.example.com"},
+			lastseen:    cTimeNow,
+			removalCode: NotRemoved,
+		},
+	}
+
+	// Create a config with CNAME chain: paperless-ai -> paperless-ngx -> docker-services
+	config := &TomlConfig{
+		Processing: struct {
+			Domains    []string
+			Additional []struct {
+				IP           string
+				Hostnames    []string
+				Name         string
+				KeepMultiple *bool
+			}
+			Blocked  []struct{ IP, Name string }
+			Cnames   []struct{ Cname, Hostname string }
+			KeepMacs bool
+		}{
+			Domains: []string{"example.com"},
+			Cnames: []struct{ Cname, Hostname string }{
+				{Cname: "paperless-ai.example.com", Hostname: "paperless-ngx.example.com"},     // CNAME -> CNAME
+				{Cname: "paperless-ngx.example.com", Hostname: "docker-services.example.com"}, // CNAME -> A
+			},
+		},
+	}
+
+	// Set up global logger for testing
+	if logger == nil {
+		logger = log.New(os.Stderr)
+	}
+
+	// Save to database
+	err = SaveDatabase(db, hostmaps, config)
+	if err != nil {
+		t.Errorf("SaveDatabase() error = %v", err)
+		return
+	}
+
+	// Verify CNAME records were created for the chain
+	var cnameRecords []sqlmodel.Record
+	if err := db.Model(&sqlmodel.Record{}).Where("type = ?", "CNAME").Order("name").Find(&cnameRecords).Error; err != nil {
+		t.Errorf("Failed to find CNAME records: %v", err)
+	}
+
+	// We should have 2 CNAME records
+	if len(cnameRecords) != 2 {
+		t.Errorf("Expected 2 CNAME records, got %d", len(cnameRecords))
+		for _, rec := range cnameRecords {
+			t.Logf("Found CNAME: %s -> %s", rec.Name, rec.Content)
+		}
+	}
+
+	// Verify the chain is correct
+	foundAI := false
+	foundNGX := false
+
+	for _, record := range cnameRecords {
+		// All CNAME content should have trailing dots
+		if !strings.HasSuffix(record.Content, ".") {
+			t.Errorf("CNAME record %s has content without trailing dot: %s", record.Name, record.Content)
+		}
+
+		if record.Name == "paperless-ai.example.com" {
+			foundAI = true
+			if record.Content != "paperless-ngx.example.com." {
+				t.Errorf("Expected paperless-ai to point to 'paperless-ngx.example.com.', got '%s'", record.Content)
+			}
+		}
+
+		if record.Name == "paperless-ngx.example.com" {
+			foundNGX = true
+			if record.Content != "docker-services.example.com." {
+				t.Errorf("Expected paperless-ngx to point to 'docker-services.example.com.', got '%s'", record.Content)
+			}
+		}
+	}
+
+	if !foundAI {
+		t.Error("paperless-ai.example.com CNAME not found")
+	}
+	if !foundNGX {
+		t.Error("paperless-ngx.example.com CNAME not found")
+	}
+}
