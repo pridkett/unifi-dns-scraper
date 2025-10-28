@@ -13,6 +13,24 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+// normalizeDNSName ensures a DNS name has a trailing dot (for FQDN format)
+// This is required for PowerDNS CNAME content fields
+func normalizeDNSName(name string) string {
+	if name == "" {
+		return name
+	}
+	if !strings.HasSuffix(name, ".") {
+		return name + "."
+	}
+	return name
+}
+
+// normalizeHostname strips the trailing dot from a DNS name for lookups
+// This ensures consistent map lookups regardless of whether the input has a trailing dot
+func normalizeHostname(name string) string {
+	return strings.TrimSuffix(name, ".")
+}
+
 func OpenDatabase(driver string, dsn string) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
@@ -53,24 +71,25 @@ func SaveDatabase(db *gorm.DB, hostmaps []*Hostmap, config *TomlConfig) error {
 	}
 
 	// Map domain names to their DB records for easy lookup
+	// Normalize keys to ensure consistent lookups
 	recordMap := make(map[string]sqlmodel.Record)
 	for _, record := range records {
-		recordMap[record.Name] = record
+		recordMap[normalizeHostname(record.Name)] = record
 	}
 
 	// First, process host A records
 	for _, hostmap := range hostmaps {
 		for _, host := range hostmap.fqdns {
-			host = strings.TrimSuffix(host, ".")
+			normalizedHost := normalizeHostname(host)
 
-			if record, ok := recordMap[host]; ok {
+			if record, ok := recordMap[normalizedHost]; ok {
 				if record.Content != hostmap.ip.String() {
 					record.Content = hostmap.ip.String()
 					updateRecords = append(updateRecords, record)
 				}
 			} else {
 				newRecords = append(newRecords, sqlmodel.Record{
-					Name:    host,
+					Name:    normalizedHost,
 					Type:    "A",
 					Content: hostmap.ip.String(),
 					Ttl:     3600,
@@ -86,37 +105,47 @@ func SaveDatabase(db *gorm.DB, hostmaps []*Hostmap, config *TomlConfig) error {
 	}
 
 	// Create a map for CNAME lookups
+	// Normalize keys to ensure consistent lookups
 	cnameMap := make(map[string]sqlmodel.Record)
 	for _, record := range cnameRecords {
-		cnameMap[record.Name] = record
+		cnameMap[normalizeHostname(record.Name)] = record
 	}
 
 	// Create a map of hostnames for resolving CNAMEs
+	// Normalize hostnames to ensure consistent lookups
 	hostnameMap := make(map[string]bool)
 	for _, hostmap := range hostmaps {
 		if hostmap.removalCode == NotRemoved {
 			for _, fqdn := range hostmap.fqdns {
-				hostnameMap[fqdn] = true
+				hostnameMap[normalizeHostname(fqdn)] = true
 			}
 		}
 	}
 
 	// Process CNAME records
 	for _, cname := range config.Processing.Cnames {
+		// Normalize the target hostname for lookup
+		normalizedTarget := normalizeHostname(cname.Hostname)
+		normalizedCname := normalizeHostname(cname.Cname)
+
 		// First make sure the target hostname exists somewhere in our data
-		if _, exists := hostnameMap[cname.Hostname]; exists {
-			if record, ok := cnameMap[cname.Cname]; ok {
+		if _, exists := hostnameMap[normalizedTarget]; exists {
+			// CNAME content must have trailing dot for PowerDNS
+			cnameContent := normalizeDNSName(cname.Hostname)
+
+			if record, ok := cnameMap[normalizedCname]; ok {
 				// Update existing CNAME if the target changed
-				if record.Content != cname.Hostname {
-					record.Content = cname.Hostname
+				// Compare normalized versions to avoid unnecessary updates
+				if normalizeHostname(record.Content) != normalizedTarget {
+					record.Content = cnameContent
 					updateRecords = append(updateRecords, record)
 				}
 			} else {
 				// Create new CNAME record
 				newRecords = append(newRecords, sqlmodel.Record{
-					Name:    cname.Cname,
+					Name:    normalizedCname,
 					Type:    "CNAME",
-					Content: cname.Hostname,
+					Content: cnameContent,
 					Ttl:     3600,
 				})
 			}
